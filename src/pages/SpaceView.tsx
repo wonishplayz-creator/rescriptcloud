@@ -74,6 +74,8 @@ export default function SpaceView() {
     toast({ title: "Files saved", description: "All files persisted to cloud storage." });
   };
 
+  const hasIsolationIssue = !!wcError && /crossoriginisolated|sharedarraybuffer|isolation/i.test(wcError);
+
   if (loading) return null;
   if (!user) return <Navigate to="/auth" replace />;
   if (fetching) return <DashboardLayout><div className="flex items-center justify-center h-full text-muted-foreground">Loading...</div></DashboardLayout>;
@@ -99,7 +101,7 @@ export default function SpaceView() {
               }`}
             />
             <span className="text-xs text-muted-foreground">
-              {booting ? "Booting WebContainer..." : instance ? "WebContainer Running" : wcError || "Offline"}
+              {booting ? "Booting WebContainer..." : instance ? "WebContainer Running" : wcError ? "WebContainer unavailable" : "Offline"}
             </span>
           </div>
           <div className="ml-auto">
@@ -114,6 +116,12 @@ export default function SpaceView() {
             </Button>
           </div>
         </div>
+
+        {hasIsolationIssue && (
+          <div className="mx-4 mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-foreground">
+            WebContainer couldn’t start due to browser isolation requirements. Try Chrome/Edge, disable strict privacy blockers for this site, then hard refresh.
+          </div>
+        )}
 
         <Tabs defaultValue="terminal" className="flex-1 flex flex-col overflow-hidden">
           <TabsList className="mx-4 mt-3 w-fit">

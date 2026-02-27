@@ -5,13 +5,50 @@ import { supabase } from "@/integrations/supabase/client";
 let _webcontainerInstance: WebContainer | null = null;
 let _bootPromise: Promise<WebContainer> | null = null;
 
+type WebContainerCoepMode = "require-corp" | "none";
+
+function formatBootError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message.includes("crossOriginIsolated") || message.includes("SharedArrayBuffer")) {
+    return new Error(
+      "WebContainer failed to start because browser isolation requirements were not met. Try Chrome/Edge, disable strict privacy blockers for this site, and hard refresh once."
+    );
+  }
+
+  return error instanceof Error ? error : new Error(message);
+}
+
+async function bootWithMode(coep: WebContainerCoepMode): Promise<WebContainer> {
+  return WebContainer.boot({ coep });
+}
+
 async function getWebContainer(): Promise<WebContainer> {
   if (_webcontainerInstance) return _webcontainerInstance;
   if (_bootPromise) return _bootPromise;
 
-  _bootPromise = WebContainer.boot().then((instance) => {
-    _webcontainerInstance = instance;
-    return instance;
+  const primaryMode: WebContainerCoepMode =
+    typeof window !== "undefined" && window.crossOriginIsolated ? "require-corp" : "none";
+
+  _bootPromise = (async () => {
+    try {
+      const instance = await bootWithMode(primaryMode);
+      _webcontainerInstance = instance;
+      return instance;
+    } catch (primaryError) {
+      // If strict isolation mode fails, fallback to Chromium's non-isolated mode.
+      if (primaryMode === "require-corp") {
+        const fallbackInstance = await bootWithMode("none");
+        _webcontainerInstance = fallbackInstance;
+        return fallbackInstance;
+      }
+
+      throw formatBootError(primaryError);
+    }
+  })().catch((error) => {
+    _bootPromise = null;
+    _webcontainerInstance = null;
+    throw formatBootError(error);
   });
 
   return _bootPromise;
