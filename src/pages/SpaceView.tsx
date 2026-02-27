@@ -2,12 +2,14 @@ import { useState, useEffect } from "react";
 import { useParams, Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
-import Terminal from "@/components/Terminal";
-import FileExplorer from "@/components/FileExplorer";
+import WebTerminal from "@/components/WebTerminal";
+import WebFileExplorer from "@/components/WebFileExplorer";
+import { useWebContainer } from "@/hooks/useWebContainer";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Play, Square, Cloud } from "lucide-react";
+import { ArrowLeft, Cloud, Download } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 
 interface Space {
   id: string;
@@ -19,8 +21,24 @@ interface Space {
 export default function SpaceView() {
   const { id } = useParams<{ id: string }>();
   const { user, loading } = useAuth();
+  const { toast } = useToast();
   const [space, setSpace] = useState<Space | null>(null);
   const [fetching, setFetching] = useState(true);
+
+  const {
+    instance,
+    booting,
+    error: wcError,
+    writeFile,
+    readFile,
+    listFiles,
+    deleteFile,
+    mkdir,
+    persistFiles,
+  } = useWebContainer({
+    spaceId: id || "",
+    userId: user?.id || "",
+  });
 
   useEffect(() => {
     if (!id || !user) return;
@@ -42,10 +60,18 @@ export default function SpaceView() {
     setFetching(false);
   };
 
-  const toggleStatus = async () => {
-    if (!space) return;
-    const newStatus = space.status === "running" ? "stopped" : "running";
-    await supabase.from("spaces").update({ status: newStatus }).eq("id", space.id);
+  // Auto-persist files on unmount
+  useEffect(() => {
+    return () => {
+      if (instance) {
+        persistFiles();
+      }
+    };
+  }, [instance, persistFiles]);
+
+  const handlePersistAndNotify = async () => {
+    await persistFiles();
+    toast({ title: "Files saved", description: "All files persisted to cloud storage." });
   };
 
   if (loading) return null;
@@ -69,23 +95,22 @@ export default function SpaceView() {
           <div className="flex items-center gap-1.5 ml-2">
             <span
               className={`w-2 h-2 rounded-full ${
-                space.status === "running" ? "bg-success" : space.status === "error" ? "bg-destructive" : "bg-muted-foreground"
+                booting ? "bg-warning animate-pulse" : instance ? "bg-success" : "bg-muted-foreground"
               }`}
             />
-            <span className="text-xs text-muted-foreground capitalize">{space.status}</span>
+            <span className="text-xs text-muted-foreground">
+              {booting ? "Booting WebContainer..." : instance ? "WebContainer Running" : wcError || "Offline"}
+            </span>
           </div>
           <div className="ml-auto">
             <Button
               size="sm"
-              variant={space.status === "running" ? "destructive" : "default"}
-              className={space.status !== "running" ? "bg-gradient-brand hover:opacity-90" : ""}
-              onClick={toggleStatus}
+              variant="secondary"
+              className="gap-1.5"
+              onClick={handlePersistAndNotify}
+              disabled={!instance}
             >
-              {space.status === "running" ? (
-                <><Square className="h-3 w-3 mr-1.5" /> Stop</>
-              ) : (
-                <><Play className="h-3 w-3 mr-1.5" /> Start</>
-              )}
+              <Download className="h-3 w-3" /> Save to Cloud
             </Button>
           </div>
         </div>
@@ -97,10 +122,18 @@ export default function SpaceView() {
           </TabsList>
 
           <TabsContent value="terminal" className="flex-1 px-4 pb-4 mt-0">
-            <Terminal spaceId={space.id} />
+            <WebTerminal webcontainer={instance} booting={booting} />
           </TabsContent>
           <TabsContent value="files" className="flex-1 px-4 pb-4 mt-0">
-            <FileExplorer spaceId={space.id} />
+            <WebFileExplorer
+              listFiles={listFiles}
+              readFile={readFile}
+              writeFile={writeFile}
+              deleteFile={deleteFile}
+              mkdir={mkdir}
+              persistFiles={persistFiles}
+              ready={!!instance && !booting}
+            />
           </TabsContent>
         </Tabs>
       </div>
