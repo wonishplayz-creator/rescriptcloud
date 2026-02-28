@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Cloud, LayoutDashboard, LogOut, Terminal } from "lucide-react";
+import { Cloud, Globe, LayoutDashboard, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
@@ -10,6 +10,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   const navItems = [
     { to: "/dashboard", icon: LayoutDashboard, label: "Spaces" },
+    { to: "/library", icon: Globe, label: "Library" },
   ];
 
   return (

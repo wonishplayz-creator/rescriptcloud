@@ -7,8 +7,11 @@ import WebFileExplorer from "@/components/WebFileExplorer";
 import { useWebContainer } from "@/hooks/useWebContainer";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Cloud, Download } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ArrowLeft, Cloud, Download, Globe } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
 interface Space {
@@ -16,6 +19,8 @@ interface Space {
   name: string;
   description: string;
   status: string;
+  is_public: boolean;
+  subdomain: string | null;
 }
 
 export default function SpaceView() {
@@ -74,6 +79,43 @@ export default function SpaceView() {
     toast({ title: "Files saved", description: "All files persisted to cloud storage." });
   };
 
+  // Publishing state
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [subdomain, setSubdomain] = useState("");
+  const [publishing, setPublishing] = useState(false);
+
+  useEffect(() => {
+    if (space?.subdomain) setSubdomain(space.subdomain);
+  }, [space]);
+
+  const handlePublish = async () => {
+    if (!subdomain.trim() || !id) return;
+    const slug = subdomain.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    setPublishing(true);
+    if (instance) await persistFiles();
+
+    const { error } = await supabase
+      .from("spaces")
+      .update({ is_public: true, subdomain: slug })
+      .eq("id", id);
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Published!", description: `Available at /spaces/public/${slug}` });
+      setPublishDialogOpen(false);
+      fetchSpace();
+    }
+    setPublishing(false);
+  };
+
+  const handleUnpublish = async () => {
+    if (!id) return;
+    await supabase.from("spaces").update({ is_public: false }).eq("id", id);
+    toast({ title: "Unpublished", description: "Space is now private." });
+    fetchSpace();
+  };
+
   const hasIsolationIssue = !!wcError && /crossoriginisolated|sharedarraybuffer|isolation/i.test(wcError);
 
   if (loading) return null;
@@ -104,7 +146,54 @@ export default function SpaceView() {
               {booting ? "Booting WebContainer..." : instance ? "WebContainer Running" : wcError ? "WebContainer unavailable" : "Offline"}
             </span>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex gap-2">
+            {space.is_public ? (
+              <>
+                <Link to={`/spaces/public/${space.subdomain}`} target="_blank">
+                  <Button size="sm" variant="outline" className="gap-1.5">
+                    <Globe className="h-3 w-3" /> View Public
+                  </Button>
+                </Link>
+                <Button size="sm" variant="ghost" onClick={handleUnpublish}>
+                  Unpublish
+                </Button>
+              </>
+            ) : (
+              <Dialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="gap-1.5">
+                    <Globe className="h-3 w-3" /> Publish
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Publish Space</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 mt-2">
+                    <div className="space-y-2">
+                      <Label>Subdomain</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={subdomain}
+                          onChange={(e) => setSubdomain(e.target.value)}
+                          placeholder="my-project"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Will be accessible at /spaces/public/{subdomain || "my-project"}
+                      </p>
+                    </div>
+                    <Button
+                      className="w-full bg-gradient-brand hover:opacity-90"
+                      onClick={handlePublish}
+                      disabled={publishing || !subdomain.trim()}
+                    >
+                      {publishing ? "Publishing..." : "Publish"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
             <Button
               size="sm"
               variant="secondary"
@@ -119,7 +208,7 @@ export default function SpaceView() {
 
         {hasIsolationIssue && (
           <div className="mx-4 mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-foreground">
-            WebContainer couldn’t start due to browser isolation requirements. Try Chrome/Edge, disable strict privacy blockers for this site, then hard refresh.
+            WebContainer couldn't start due to browser isolation requirements. Try Chrome/Edge, disable strict privacy blockers for this site, then hard refresh.
           </div>
         )}
 
