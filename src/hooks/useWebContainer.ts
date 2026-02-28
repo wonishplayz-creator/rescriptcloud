@@ -112,6 +112,20 @@ export function useWebContainer({ spaceId, userId }: UseWebContainerOptions) {
           });
         }
 
+        // Auto-install dependencies if package.json has any
+        try {
+          const pkgJson = await wc.fs.readFile("/package.json", "utf-8");
+          const pkg = JSON.parse(pkgJson);
+          if (pkg.dependencies && Object.keys(pkg.dependencies).length > 0) {
+            console.log("[WebContainer] Auto-installing dependencies...");
+            const installProcess = await wc.spawn("npm", ["install"]);
+            await installProcess.exit;
+            console.log("[WebContainer] Dependencies installed.");
+          }
+        } catch {
+          // No package.json or parse error, skip
+        }
+
         mountedRef.current = true;
         setInstance(wc);
       } catch (err: any) {

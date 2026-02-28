@@ -8,6 +8,8 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import SpaceView from "./pages/SpaceView";
+import PublicLibrary from "./pages/PublicLibrary";
+import PublicSpaceView from "./pages/PublicSpaceView";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +26,8 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/space/:id" element={<SpaceView />} />
+            <Route path="/library" element={<PublicLibrary />} />
+            <Route path="/spaces/public/:subdomain" element={<PublicSpaceView />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
